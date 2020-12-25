@@ -21,6 +21,7 @@ class Pyqt5_Serial(QtWidgets.QWidget, Ui_Form):
         self.lineEdit.setText(str(self.data_num_received))
         self.data_num_sended = 0
         self.lineEdit_2.setText(str(self.data_num_sended))
+        self.recvData = {'MinRecv': 10000, 'MaxRecv': 0}
 
     def init(self):
         # 串口检测按钮
@@ -143,36 +144,66 @@ class Pyqt5_Serial(QtWidgets.QWidget, Ui_Form):
 
     # 接收数据
     def data_receive(self):
+        sync_flag = False  # 包头1 叫同步帧
+        head_flag = False  # 包头2
+
         try:
-            num = self.ser.inWaiting()
-        except:
-            self.port_close()
+            # 搜索开始数据包  0度 数据包  OXFA 0XA0  开头为0xfa 0xa0,0xfa 0xa1,0xfa 0xa2 ...
+            while not sync_flag or not head_flag:
+                b = self.ser.read(1)
+                print(b)
+                if b and b[0] == 0X0D:  # 包头1
+                    sync_flag = True
+                    head_flag = False
+                elif b and sync_flag and b[0] == 0x0A:  # 包头2
+                    head_flag = True
+                else:
+                    sync_flag = False
+                    head_flag = False
+
+                # 包头1,2都正确
+            # 读出剩下的数据包
+            data = self.ser.read(4)
+            # 将数据组装成AD值
+            out_s1 = int(chr(data[0]), 16) * 256 * 16
+            out_s1 = out_s1 + int(chr(data[1]), 16) * 256
+            out_s1 = out_s1 + int(chr(data[2]), 16) * 16
+            out_s1 = out_s1 + int(chr(data[3]), 16)
+            kk = int(chr(data[0]), 16)
+            # kk = chr(int(str(data[0]), 16))
+
+            if self.recvData['MinRecv'] > out_s1:
+                self.recvData['MinRecv'] = out_s1
+                print("MinRecv%d\r\n", out_s1)
+            if self.recvData['MaxRecv'] < out_s1:
+                self.recvData['MaxRecv'] = out_s1
+                print("MaxRecv%d\r\n", out_s1)
+
+            print('{0} {1} {2} {3} data={4},MIN={5},MAX{6}'.format(int(chr(data[0]), 16), int(chr(data[1]), 16),
+                                                                   int(chr(data[2]), 16), int(chr(data[3]), 16), out_s1,
+                                                                   self.recvData['MinRecv'], self.recvData['MaxRecv']))
+
+            out_s = '{:d}'.format(out_s1) + ' '
+            self.s2__receive_text.insertPlainText(out_s)
+        except ValueError:
+            # self.port_close()
+            print("数值有问题")
             return None
-        if num > 0:
-            data = self.ser.read(num)
-            num = len(data)
-            # hex显示
-            if self.hex_receive.checkState():
-                out_s = ''
-                for i in range(0, len(data)):
-                    out_s = out_s + '{:02X}'.format(data[i]) + ' '
-                self.s2__receive_text.insertPlainText(out_s)
-            else:
-                # 串口接收到的字符串为b'123',要转化成unicode字符串才能输出到窗口中去
-                self.s2__receive_text.insertPlainText(data.decode('iso-8859-1'))
+        except Exception as ex:
+            print("异常%s" % ex)
 
-            # 统计接收字符的数量
-            self.data_num_received += num
-            self.lineEdit.setText(str(self.data_num_received))
+        num = 0
 
-            # 获取到text光标
-            textCursor = self.s2__receive_text.textCursor()
-            # 滚动到底部
-            textCursor.movePosition(textCursor.End)
-            # 设置光标到text中去
-            self.s2__receive_text.setTextCursor(textCursor)
-        else:
-            pass
+        # 统计接收字符的数量
+        self.data_num_received += num
+        self.lineEdit.setText(str(self.data_num_received))
+
+        # 获取到text光标
+        textCursor = self.s2__receive_text.textCursor()
+        # 滚动到底部
+        textCursor.movePosition(textCursor.End)
+        # 设置光标到text中去
+        self.s2__receive_text.setTextCursor(textCursor)
 
     # 定时发送数据
     def data_send_timer(self):
