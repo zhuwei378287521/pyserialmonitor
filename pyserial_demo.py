@@ -1,10 +1,15 @@
 import sys
+import time
+
 import serial
 import serial.tools.list_ports
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QTimer
 from ui_demo_1 import Ui_Form
+
+import pandas as pd
+
 
 
 class Pyqt5_Serial(QtWidgets.QWidget, Ui_Form):
@@ -22,6 +27,19 @@ class Pyqt5_Serial(QtWidgets.QWidget, Ui_Form):
         self.data_num_sended = 0
         self.lineEdit_2.setText(str(self.data_num_sended))
         self.recvData = {'MinRecv': 10000, 'MaxRecv': 0}
+
+        # self.filePT = open('serialData.txt', 'r+')
+        # # data = f.read()
+        # # print(data)
+        # strTemp = '串口数据记录**********' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '********************'
+        # self.filePT.write(strTemp)
+        # data1 = self.filePT.read()
+        # print(type(data1))
+        # print(data1)
+        # # f.close()
+
+        self.CSV_FILE_PATH = './test.csv'
+
 
     def init(self):
         # 串口检测按钮
@@ -185,9 +203,17 @@ class Pyqt5_Serial(QtWidgets.QWidget, Ui_Form):
 
             out_s = '{:d}'.format(out_s1) + ' '
             self.s2__receive_text.insertPlainText(out_s)
-        except ValueError:
+
+            # save to CSV
+            a = [[time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), time.time(), out_s1],]
+            df = pd.DataFrame(a, columns=['time', 'timestamp', 'data'])
+            df.to_csv(self.CSV_FILE_PATH, mode='a', header=False)
+
+
+        except ValueError as ex:
             # self.port_close()
             print("数值有问题")
+            print(ex)
             return None
         except Exception as ex:
             print("异常%s" % ex)
